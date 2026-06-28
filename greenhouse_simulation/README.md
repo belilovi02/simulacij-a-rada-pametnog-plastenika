@@ -11,6 +11,16 @@ Ovaj projekt je Python desktop aplikacija koja simulira pametni plastenik korist
 - jednostavan ML model za predikciju navodnjavanja i ventilacije
 - logovanje podataka u CSV fajl
 
+## Komponente i kako rade
+- Senzori: prate temperaturu, vlažnost zraka, vlagu zemljišta, pH, NPK i CO2.
+- Aktuatori: predstavljaju pumpu, ventilator, LED, otvor plastenika i alarm.
+- ESP32 kontroler: prima komande iz GUI-a i prosljeđuje ih Arduino kontroleru.
+- Arduino Mega kontroler: čita stanje senzora, primjenjuje automatsku logiku i upravlja aktuatorima.
+- Dashboard: prikazuje senzore, aktuatore, stanje kontrolera, energiju i rezultate Monte Carlo/ML.
+- Monte Carlo: simulira veliki broj slučajnih scenarija i prikazuje koliko puta se nešto dogodilo.
+- ML predikcija: procjenjuje treba li navodnjavanje ili ventilacija na osnovu trenutnih vrijednosti.
+- Reporting: sprema rezultate Monte Carlo-a i sve predikcije sa vremenom u CSV datoteke u folderu data.
+
 ## Cilj projekta
 - simulirati pametni plastenik
 - prikazati paralelni rad dva kontrolera (ESP32 i Arduino Mega)
@@ -64,6 +74,19 @@ Random Forest model trenira se na sintetičkom datasetu koji koristi senzorske v
 - irrigation_needed
 - ventilation_needed
 
+## Spremanje rezultata
+Aplikacija automatski zapisuje rezultate u folderu data:
+- monte_carlo_report.csv - rezultat Monte Carlo simulacije za 500 pokretanja po defaultu, sa svim generiranim koracima i vremenskom oznakom
+- prediction_events.csv - povijest predikcija sa vremenom, senzorskim vrijednostima i preporukama
+- simulation_log.csv - tok događaja i stanja aktuatora kroz rad aplikacije
+
+## Kako koristiti
+1. Pokrenite aplikaciju sa `python main.py`.
+2. U kartici Monte Carlo unesite broj simulacija ili ostavite 500.
+3. Kliknite na „Pokreni Monte Carlo“.
+4. Rezultati se automatski spremaju u folder data.
+5. U kartici ML predikcija kliknite „Predvidi“ i svaka predikcija se zapisa u CSV datoteku sa vremenom.
+
 ## Instalacija
 1. Otvorite terminal u direktoriju greenhouse_simulation
 2. Instalirajte zavisnosti:
@@ -73,6 +96,7 @@ Random Forest model trenira se na sintetičkom datasetu koji koristi senzorske v
 
 ## Struktura projekta
 - main.py - ulazna tačka aplikacije
+- simulation/reporting.py - spremanje izvještaja i predikcija
 - controllers/esp32_controller.py - virtualni ESP32 kontroler
 - controllers/arduino_mega_controller.py - virtualni Arduino Mega kontroler
 - simulation/sensors.py - model senzora

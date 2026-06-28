@@ -12,6 +12,7 @@ from matplotlib.figure import Figure
 
 from simulation.monte_carlo import run_monte_carlo
 from simulation.energy_model import EnergyModel
+from simulation.reporting import save_monte_carlo_report, save_prediction_event
 
 
 class GreenhouseDashboard:
@@ -53,7 +54,7 @@ class GreenhouseDashboard:
         values_frame.pack(side=tk.TOP, fill=tk.X, padx=8, pady=8)
 
         self.sensor_labels = {}
-        for idx, label in enumerate(["temperature", "air_humidity", "soil_moisture", "ph", "npk", "light"]):
+        for idx, label in enumerate(["temperature", "air_humidity", "soil_moisture", "ph", "npk", "co2"]):
             ttk.Label(values_frame, text=label.replace("_", " ") + ":").grid(row=idx, column=0, sticky=tk.W, padx=4, pady=2)
             self.sensor_labels[label] = ttk.Label(values_frame, text="---")
             self.sensor_labels[label].grid(row=idx, column=1, sticky=tk.W, padx=4, pady=2)
@@ -150,6 +151,11 @@ class GreenhouseDashboard:
         self.prediction_label = ttk.Label(predict_frame, text="---")
         self.prediction_label.pack(side=tk.LEFT, padx=4)
 
+        recommendation_frame = ttk.LabelFrame(self.ml_frame, text="Preporuka akcije")
+        recommendation_frame.pack(side=tk.TOP, fill=tk.X, padx=8, pady=8)
+        self.recommendation_label = ttk.Label(recommendation_frame, text="Čekam na podatke...")
+        self.recommendation_label.pack(anchor=tk.W, padx=4, pady=4)
+
     def _refresh_loop(self):
         self._update_dashboard()
         self.root.after(1500, self._refresh_loop)
@@ -202,17 +208,39 @@ class GreenhouseDashboard:
         self.confusion_text.config(state=tk.DISABLED)
 
         self.feature_axis.clear()
-        names = ["temperature", "air_humidity", "soil_moisture", "ph", "npk", "light"]
-        self.feature_axis.bar(names, self.ml_model.feature_importances_, color="orange")
-        self.feature_axis.set_title("Feature importance")
+        names = self.ml_model.feature_names
+        values = self.ml_model.feature_importances_
+        self.feature_axis.bar(names, values, color="#f39c12")
+        self.feature_axis.set_title("Važnost značajki za predikciju")
+        self.feature_axis.set_ylabel("Važnost")
+        self.feature_axis.tick_params(axis='x', rotation=20)
         self.feature_fig.tight_layout()
         self.feature_canvas.draw()
 
     def _predict_current(self):
         current = self.sensors.current_values()
         prediction = self.ml_model.predict(current)
-        self.prediction_label.config(text=f"Irrigation: {prediction['irrigation_needed']}, Ventilation: {prediction['ventilation_needed']}")
+        label = "Potrebna navodnjavanja" if prediction["irrigation_needed"] else "Nema potrebe za navodnjavanjem"
+        ventilation = "Potrebna ventilacija" if prediction["ventilation_needed"] else "Ventilacija nije potrebna"
+        self.prediction_label.config(text=f"{label} | {ventilation}")
+        self._update_recommendation(current, prediction)
+        save_prediction_event(current, prediction, self.recommendation_label.cget("text"))
         self.add_log("ESP32: pokrenuta ML predikcija na trenutnim podacima")
+
+    def _update_recommendation(self, current, prediction):
+        actions = []
+        if prediction["irrigation_needed"]:
+            actions.append("uključi pumpu")
+        if prediction["ventilation_needed"]:
+            actions.append("uključi ventilaciju")
+        if current.get("temperature", 0) > 35:
+            actions.append("otvori plastenik")
+        if current.get("soil_moisture", 0) >= 70:
+            actions.append("isključi pumpu")
+        if not actions:
+            actions.append("ostavi sustav u miru")
+
+        self.recommendation_label.config(text="Preporuka: " + ", ".join(actions))
 
     def run_monte_carlo(self):
         simulations = max(10, self.monte_input.get())
@@ -220,19 +248,23 @@ class GreenhouseDashboard:
         self.monte_results.config(state=tk.NORMAL)
         self.monte_results.delete("1.0", tk.END)
         self.monte_results.insert(tk.END, f"Simulacija: {simulations}\n")
-        self.monte_results.insert(tk.END, f"Pumpa uključena: {summary['pump_count']}\n")
-        self.monte_results.insert(tk.END, f"Ventilator uključeno: {summary['fan_count']}\n")
-        self.monte_results.insert(tk.END, f"Otvaranje plastenika: {summary['open_greenhouse_count']}\n")
-        self.monte_results.insert(tk.END, f"Alarm: {summary['alarm_count']}\n")
-        self.monte_results.insert(tk.END, f"Prosječna temperatura: {summary['avg_temperature']:.2f}\n")
-        self.monte_results.insert(tk.END, f"Prosječna vlažnost zemljišta: {summary['avg_soil_moisture']:.2f}\n")
+        self.monte_results.insert(tk.END, f"Pumpa uključena: {summary['pump_count']} puta\n")
+        self.monte_results.insert(tk.END, f"Ventilator uključen: {summary['fan_count']} puta\n")
+        self.monte_results.insert(tk.END, f"LED uključen: {summary['led_count']} puta\n")
+        self.monte_results.insert(tk.END, f"Otvaranje plastenika: {summary['open_greenhouse_count']} puta\n")
+        self.monte_results.insert(tk.END, f"Alarm: {summary['alarm_count']} puta\n")
+        self.monte_results.insert(tk.END, f"Prosječna temperatura: {summary['avg_temperature']:.2f} °C\n")
+        self.monte_results.insert(tk.END, f"Prosječna vlažnost zemljišta: {summary['avg_soil_moisture']:.2f}%\n")
         self.monte_results.config(state=tk.DISABLED)
         self._plot_montecarlo(df)
+        save_monte_carlo_report(summary, df)
 
     def _plot_montecarlo(self, df):
         self.monte_axis.clear()
-        self.monte_axis.hist(df["temperature"], bins=20, color="green", alpha=0.7)
-        self.monte_axis.set_title("Distribucija temperature")
+        self.monte_axis.hist(df["temperature"], bins=20, color="#2ecc71", alpha=0.7)
+        self.monte_axis.set_title("Distribucija temperature u Monte Carlo simulaciji")
+        self.monte_axis.set_xlabel("Temperatura (°C)")
+        self.monte_axis.set_ylabel("Broj simulacija")
         self.monte_canvas.draw()
 
     def add_log(self, message):
@@ -251,7 +283,7 @@ class GreenhouseDashboard:
             sensors["soil_moisture"],
             sensors["ph"],
             sensors["npk"],
-            sensors["light"],
+            sensors["co2"],
             actuators["pump1"],
             actuators["pump2"],
             actuators["fan"],
@@ -264,5 +296,5 @@ class GreenhouseDashboard:
         with open(self.log_file, mode="a", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             if not file_exists:
-                writer.writerow(["timestamp", "temperature", "air_humidity", "soil_moisture", "ph", "npk", "light", "pump1", "pump2", "fan", "led", "greenhouse_open", "alarm", "energy_consumption"])
+                writer.writerow(["timestamp", "temperature", "air_humidity", "soil_moisture", "ph", "npk", "co2", "pump1", "pump2", "fan", "led", "greenhouse_open", "alarm", "energy_consumption"])
             writer.writerow(row)

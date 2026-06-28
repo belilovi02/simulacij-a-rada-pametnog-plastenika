@@ -17,7 +17,7 @@ def ensure_data_file():
     os.makedirs(DATA_DIR, exist_ok=True)
     if not os.path.exists(LOG_FILE):
         with open(LOG_FILE, "w", encoding="utf-8") as f:
-            f.write("timestamp,temperature,air_humidity,soil_moisture,ph,npk,light,pump1,pump2,fan,led,greenhouse_open,alarm,energy_consumption\n")
+            f.write("timestamp,temperature,air_humidity,soil_moisture,ph,npk,co2,pump1,pump2,fan,led,greenhouse_open,alarm,energy_consumption\n")
 
 
 if __name__ == "__main__":

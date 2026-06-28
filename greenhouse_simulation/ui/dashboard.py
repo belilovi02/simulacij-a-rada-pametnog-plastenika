@@ -16,7 +16,7 @@ from simulation.reporting import save_monte_carlo_report, save_prediction_event
 
 
 class GreenhouseDashboard:
-    def __init__(self, root, esp32, arduino, sensors, actuators, ml_model, log_file):
+    def __init__(self, root, esp32, arduino, sensors, actuators, ml_model, log_file, weather_station=None):
         self.root = root
         self.esp32 = esp32
         self.arduino = arduino
@@ -24,7 +24,9 @@ class GreenhouseDashboard:
         self.actuators = actuators
         self.ml_model = ml_model
         self.log_file = log_file
+        self.weather_station = weather_station
         self.energy_model = EnergyModel(actuators)
+        self.monte_last_trend = {"temperature": [], "soil_moisture": [], "co2": [], "ph": [], "npk": []}
         self.esp32.set_log_callback(self.add_log)
         self.arduino.set_log_callback(self.add_log)
         self._build_ui()
@@ -38,16 +40,19 @@ class GreenhouseDashboard:
         self.montecarlo_frame = ttk.Frame(self.notebook)
         self.energy_frame = ttk.Frame(self.notebook)
         self.ml_frame = ttk.Frame(self.notebook)
+        self.weather_frame = ttk.Frame(self.notebook)
 
         self.notebook.add(self.dashboard_frame, text="Dashboard")
         self.notebook.add(self.montecarlo_frame, text="Monte Carlo")
         self.notebook.add(self.energy_frame, text="Energetska sim")
         self.notebook.add(self.ml_frame, text="ML predikcija")
+        self.notebook.add(self.weather_frame, text="Meteo stanica")
 
         self._build_dashboard_tab()
         self._build_montecarlo_tab()
         self._build_energy_tab()
         self._build_ml_tab()
+        self._build_weather_tab()
 
     def _build_dashboard_tab(self):
         values_frame = ttk.LabelFrame(self.dashboard_frame, text="Senzori")
@@ -63,7 +68,7 @@ class GreenhouseDashboard:
         actuators_frame.pack(side=tk.TOP, fill=tk.X, padx=8, pady=8)
 
         self.actuator_labels = {}
-        for idx, label in enumerate(["pump1", "pump2", "fan", "led", "greenhouse_open", "alarm"]):
+        for idx, label in enumerate(["pump1", "pump2", "fan", "greenhouse_open", "alarm"]):
             ttk.Label(actuators_frame, text=label.replace("_", " ") + ":").grid(row=idx, column=0, sticky=tk.W, padx=4, pady=2)
             self.actuator_labels[label] = ttk.Label(actuators_frame, text="OFF")
             self.actuator_labels[label].grid(row=idx, column=1, sticky=tk.W, padx=4, pady=2)
@@ -78,8 +83,6 @@ class GreenhouseDashboard:
             ("Pumpa 2 OFF", "pump2_off"),
             ("Ventilator ON", "fan_on"),
             ("Ventilator OFF", "fan_off"),
-            ("LED ON", "led_on"),
-            ("LED OFF", "led_off"),
             ("Otvoreni plastenik", "greenhouse_open"),
             ("Zatvoreni plastenik", "greenhouse_close"),
         ]
@@ -112,8 +115,7 @@ class GreenhouseDashboard:
         self.monte_results = tk.Text(self.montecarlo_frame, height=10, state=tk.DISABLED)
         self.monte_results.pack(fill=tk.X, padx=8, pady=8)
 
-        self.monte_fig = Figure(figsize=(5, 3), dpi=100)
-        self.monte_axis = self.monte_fig.add_subplot(111)
+        self.monte_fig = Figure(figsize=(8, 5), dpi=100)
         self.monte_canvas = FigureCanvasTkAgg(self.monte_fig, master=self.montecarlo_frame)
         self.monte_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
 
@@ -122,15 +124,28 @@ class GreenhouseDashboard:
         self.energy_report.pack(side=tk.TOP, fill=tk.X, padx=8, pady=8)
 
         self.energy_labels = {}
-        for idx, label in enumerate(["consumption", "production", "battery_wh", "runtime_h"]):
-            ttk.Label(self.energy_report, text=label.replace("_", " ") + ":").grid(row=idx, column=0, sticky=tk.W, padx=4, pady=2)
+        for idx, label in enumerate(["consumption", "production", "battery_wh", "runtime_h", "net_balance_wh", "battery_percentage", "solar_coverage_pct"]):
+            ttk.Label(self.energy_report, text=label.replace("_", " ") + ":").grid(row=idx // 2, column=0 if idx % 2 == 0 else 2, sticky=tk.W, padx=4, pady=2)
             self.energy_labels[label] = ttk.Label(self.energy_report, text="---")
-            self.energy_labels[label].grid(row=idx, column=1, sticky=tk.W, padx=4, pady=2)
+            self.energy_labels[label].grid(row=idx // 2, column=1 if idx % 2 == 0 else 3, sticky=tk.W, padx=4, pady=2)
 
-        self.energy_fig = Figure(figsize=(5, 3), dpi=100)
-        self.energy_axis = self.energy_fig.add_subplot(111)
+        self.energy_fig = Figure(figsize=(8, 4), dpi=100)
         self.energy_canvas = FigureCanvasTkAgg(self.energy_fig, master=self.energy_frame)
         self.energy_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
+
+    def _build_weather_tab(self):
+        weather_panel = ttk.LabelFrame(self.weather_frame, text="Podaci meteorološke stanice")
+        weather_panel.pack(side=tk.TOP, fill=tk.X, padx=8, pady=8)
+
+        self.weather_labels = {}
+        for idx, label in enumerate(["outdoor_temperature", "outdoor_humidity", "wind_speed", "rainfall_mm", "weather_signal"]):
+            ttk.Label(weather_panel, text=label.replace("_", " ") + ":").grid(row=idx, column=0, sticky=tk.W, padx=4, pady=2)
+            self.weather_labels[label] = ttk.Label(weather_panel, text="---")
+            self.weather_labels[label].grid(row=idx, column=1, sticky=tk.W, padx=4, pady=2)
+
+        self.weather_fig = Figure(figsize=(8, 4), dpi=100)
+        self.weather_canvas = FigureCanvasTkAgg(self.weather_fig, master=self.weather_frame)
+        self.weather_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
 
     def _build_ml_tab(self):
         info = ttk.LabelFrame(self.ml_frame, text="Model statistika")
@@ -180,11 +195,13 @@ class GreenhouseDashboard:
 
         self._update_energy_plot(energy_report)
         self._update_ml_tab()
+        self._update_weather_tab()
         self._write_log_to_csv(sensor_values, actuator_state, energy_report["consumption"])
 
     def _update_energy_plot(self, energy_report):
-        self.energy_axis.clear()
-        labels = ["ESP32", "Mega", "Sensors", "Pump1", "Pump2", "Fan", "LED", "Motor"]
+        self.energy_fig.clear()
+        ax1 = self.energy_fig.add_subplot(121)
+        labels = ["ESP32", "Mega", "Sensors", "Pump1", "Pump2", "Fan", "Motor"]
         power = [
             self.energy_model.esp32_power,
             self.energy_model.arduino_power,
@@ -192,14 +209,40 @@ class GreenhouseDashboard:
             self.energy_model.pump1_power if self.actuators.pump1 else 0,
             self.energy_model.pump2_power if self.actuators.pump2 else 0,
             self.energy_model.fan_power if self.actuators.fan else 0,
-            self.energy_model.led_power if self.actuators.led else 0,
             self.energy_model.motor_power if self.actuators.greenhouse_open else 0,
         ]
-        self.energy_axis.bar(labels, power, color="skyblue")
-        self.energy_axis.set_title("Potrošnja po komponentama (W)")
-        self.energy_axis.set_ylabel("W")
+        ax1.bar(labels, power, color="#4C78A8", edgecolor="black", alpha=0.9)
+        ax1.set_title("Potrošnja po komponentama (W)")
+        ax1.set_ylabel("W")
+        ax1.tick_params(axis='x', rotation=20)
+
+        ax2 = self.energy_fig.add_subplot(122)
+        ax2.bar(["Potrošnja", "Proizvodnja", "Neto bilans"], [energy_report["consumption"], energy_report["production"], energy_report["net_balance_wh"]], color=["#F58518", "#54A24B", "#E45756"], edgecolor="black", alpha=0.9)
+        ax2.set_title("Energetski bilans")
+        ax2.set_ylabel("Wh")
+
         self.energy_fig.tight_layout()
         self.energy_canvas.draw()
+
+    def _update_weather_tab(self):
+        if not self.weather_station:
+            return
+        values = self.weather_station.current_values()
+        for key, label in self.weather_labels.items():
+            label.config(text=str(values[key]))
+
+        self.weather_fig.clear()
+        ax1 = self.weather_fig.add_subplot(121)
+        ax1.plot(["Temp vani", "Vjetar", "Kisa"], [values["outdoor_temperature"], values["wind_speed"], values["rainfall_mm"]], marker="o", color="#2e86de")
+        ax1.set_title("Meteo trend")
+        ax1.set_ylabel("Vrijednost")
+
+        ax2 = self.weather_fig.add_subplot(122)
+        ax2.bar(["Temp", "Vlaga", "Vjetar", "Kiša"], [values["outdoor_temperature"], values["outdoor_humidity"], values["wind_speed"], values["rainfall_mm"]], color=["#f39c12", "#16a085", "#8e44ad", "#3498db"])
+        ax2.set_title("Aktuelni meteopodaci")
+        ax2.set_ylabel("Vrijednost")
+        self.weather_fig.tight_layout()
+        self.weather_canvas.draw()
 
     def _update_ml_tab(self):
         self.confusion_text.config(state=tk.NORMAL)
@@ -255,16 +298,48 @@ class GreenhouseDashboard:
         self.monte_results.insert(tk.END, f"Alarm: {summary['alarm_count']} puta\n")
         self.monte_results.insert(tk.END, f"Prosječna temperatura: {summary['avg_temperature']:.2f} °C\n")
         self.monte_results.insert(tk.END, f"Prosječna vlažnost zemljišta: {summary['avg_soil_moisture']:.2f}%\n")
+        self.monte_results.insert(tk.END, f"Prosječni CO2: {summary['avg_co2']:.1f} ppm\n")
+        self.monte_results.insert(tk.END, f"Kritično niska vlaga: {summary['critical_low_moisture_count']} koraka\n")
+        self.monte_results.insert(tk.END, f"Kritično visoka temperatura: {summary['critical_high_temperature_count']} koraka\n")
+        self.monte_results.insert(tk.END, f"Kritično visoki CO2: {summary['critical_high_co2_count']} koraka\n")
         self.monte_results.config(state=tk.DISABLED)
+        self.monte_last_trend = summary.get("trend_series", self.monte_last_trend)
         self._plot_montecarlo(df)
         save_monte_carlo_report(summary, df)
 
     def _plot_montecarlo(self, df):
-        self.monte_axis.clear()
-        self.monte_axis.hist(df["temperature"], bins=20, color="#2ecc71", alpha=0.7)
-        self.monte_axis.set_title("Distribucija temperature u Monte Carlo simulaciji")
-        self.monte_axis.set_xlabel("Temperatura (°C)")
-        self.monte_axis.set_ylabel("Broj simulacija")
+        self.monte_fig.clear()
+
+        ax1 = self.monte_fig.add_subplot(221)
+        ax1.hist(df["temperature"], bins=20, color="#2ecc71", alpha=0.75)
+        ax1.set_title("Temperatura")
+        ax1.set_xlabel("°C")
+        ax1.set_ylabel("Broj koraka")
+
+        ax2 = self.monte_fig.add_subplot(222)
+        ax2.hist(df["soil_moisture"], bins=20, color="#3498db", alpha=0.75)
+        ax2.set_title("Vlažnost zemljišta")
+        ax2.set_xlabel("%")
+        ax2.set_ylabel("Broj koraka")
+
+        ax3 = self.monte_fig.add_subplot(223)
+        action_counts = [df["pump"].sum(), df["fan"].sum(), df["open_greenhouse"].sum(), df["alarm"].sum()]
+        ax3.bar(["Pumpa", "Ventilator", "Plastenik", "Alarm"], action_counts, color=["#e67e22", "#9b59b6", "#1abc9c", "#e74c3c"], edgecolor="black", alpha=0.9)
+        ax3.set_title("Broj aktivacija akcija")
+        ax3.set_ylabel("Ukupan broj")
+
+        ax4 = self.monte_fig.add_subplot(224)
+        ax4.plot(list(range(len(self.monte_last_trend["temperature"]))), self.monte_last_trend["temperature"], color="#e74c3c", marker="o", linewidth=1.8, label="Temperatura")
+        ax4.plot(list(range(len(self.monte_last_trend["soil_moisture"]))), self.monte_last_trend["soil_moisture"], color="#3498db", marker="s", linewidth=1.8, label="Vlažnost")
+        ax4.plot(list(range(len(self.monte_last_trend["co2"]))), self.monte_last_trend["co2"], color="#f1c40f", marker="^", linewidth=1.8, label="CO2")
+        ax4.plot(list(range(len(self.monte_last_trend["ph"]))), self.monte_last_trend["ph"], color="#16a085", marker="D", linewidth=1.5, label="pH")
+        ax4.plot(list(range(len(self.monte_last_trend["npk"]))), self.monte_last_trend["npk"], color="#8e44ad", marker="P", linewidth=1.5, label="NPK")
+        ax4.set_title("Trend kroz vrijeme")
+        ax4.set_xlabel("Korak simulacije")
+        ax4.set_ylabel("Vrijednost")
+        ax4.legend(loc="best")
+
+        self.monte_fig.tight_layout()
         self.monte_canvas.draw()
 
     def add_log(self, message):
@@ -287,7 +362,6 @@ class GreenhouseDashboard:
             actuators["pump1"],
             actuators["pump2"],
             actuators["fan"],
-            actuators["led"],
             actuators["greenhouse_open"],
             actuators["alarm"],
             energy_consumption,
@@ -296,5 +370,5 @@ class GreenhouseDashboard:
         with open(self.log_file, mode="a", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             if not file_exists:
-                writer.writerow(["timestamp", "temperature", "air_humidity", "soil_moisture", "ph", "npk", "co2", "pump1", "pump2", "fan", "led", "greenhouse_open", "alarm", "energy_consumption"])
+                writer.writerow(["timestamp", "temperature", "air_humidity", "soil_moisture", "ph", "npk", "co2", "pump1", "pump2", "fan", "greenhouse_open", "alarm", "energy_consumption"])
             writer.writerow(row)

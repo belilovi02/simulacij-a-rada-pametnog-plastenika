@@ -48,11 +48,17 @@ class EnergyModel:
         production = self.compute_solar_production()
         battery = self.update_battery(consumption)
         runtime = self.estimate_runtime(consumption)
+        net_balance = production - consumption
+        battery_percentage = round((battery / self.battery_capacity_wh) * 100, 1)
+        solar_coverage_pct = round((production / max(consumption, 1) * 100), 1)
         return {
             "consumption": consumption,
             "production": production,
             "battery_wh": battery,
             "runtime_h": runtime,
+            "net_balance_wh": round(net_balance, 2),
+            "battery_percentage": battery_percentage,
+            "solar_coverage_pct": solar_coverage_pct,
         }
 
     @staticmethod

@@ -11,7 +11,7 @@ class MLPrediction:
         self.accuracy = 0.0
         self.confusion = None
         self.feature_importances_ = None
-        self.feature_names = ["temperature", "air_humidity", "soil_moisture", "ph", "npk", "co2"]
+        self.feature_names = ["temperature", "air_humidity", "soil_moisture", "ph", "npk", "co2", "outdoor_temperature", "outdoor_humidity", "wind_speed", "rainfall_mm"]
         self._train_model()
 
     def _generate_dataset(self, rows=1200):
@@ -23,8 +23,12 @@ class MLPrediction:
             ph = np.random.uniform(4.5, 8.5)
             npk = np.random.uniform(0, 250)
             co2 = np.random.uniform(250, 900)
-            irrigation_needed = int(soil_moisture < 35 or temperature > 32)
-            ventilation_needed = int(temperature > 32 or co2 > 700 or air_humidity < 40)
+            outdoor_temperature = np.random.uniform(5, 35)
+            outdoor_humidity = np.random.uniform(25, 95)
+            wind_speed = np.random.uniform(0, 18)
+            rainfall_mm = np.random.uniform(0, 8)
+            irrigation_needed = int(soil_moisture < 35 or temperature > 32 or rainfall_mm > 2)
+            ventilation_needed = int(temperature > 32 or co2 > 700 or air_humidity < 40 or wind_speed > 10)
             data.append({
                 "temperature": temperature,
                 "air_humidity": air_humidity,
@@ -32,6 +36,10 @@ class MLPrediction:
                 "ph": ph,
                 "npk": npk,
                 "co2": co2,
+                "outdoor_temperature": outdoor_temperature,
+                "outdoor_humidity": outdoor_humidity,
+                "wind_speed": wind_speed,
+                "rainfall_mm": rainfall_mm,
                 "irrigation_needed": irrigation_needed,
                 "ventilation_needed": ventilation_needed,
             })
@@ -60,5 +68,5 @@ class MLPrediction:
         predicted = self.model.predict(X)[0]
         return {
             "irrigation_needed": int(predicted),
-            "ventilation_needed": int(values.get("temperature", 0) > 32 or values.get("co2", 0) > 700 or values.get("air_humidity", 0) < 40),
+            "ventilation_needed": int(values.get("temperature", 0) > 32 or values.get("co2", 0) > 700 or values.get("air_humidity", 0) < 40 or values.get("wind_speed", 0) > 10 or values.get("rainfall_mm", 0) > 2),
         }

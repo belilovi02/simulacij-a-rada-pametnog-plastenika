@@ -4,6 +4,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from simulation.ml_prediction import MLPrediction
+from simulation.weather_station import WeatherStationModel
 
 
 def test_predict_uses_feature_names_and_returns_expected_keys():
@@ -19,10 +20,19 @@ def test_predict_uses_feature_names_and_returns_expected_keys():
 
     prediction = model.predict(values)
 
-    assert model.feature_names == ["temperature", "air_humidity", "soil_moisture", "ph", "npk", "co2"]
+    assert set(model.feature_names) >= {"temperature", "air_humidity", "soil_moisture", "ph", "npk", "co2", "outdoor_temperature", "wind_speed", "rainfall_mm", "outdoor_humidity"}
     assert set(prediction.keys()) == {"irrigation_needed", "ventilation_needed"}
     assert isinstance(prediction["irrigation_needed"], int)
     assert isinstance(prediction["ventilation_needed"], int)
+
+
+def test_weather_station_returns_realistic_values():
+    station = WeatherStationModel()
+    values = station.current_values()
+
+    assert set(values.keys()) >= {"outdoor_temperature", "wind_speed", "rainfall_mm", "weather_signal"}
+    assert isinstance(values["weather_signal"], str)
+    assert values["wind_speed"] >= 0
 
 
 def test_predict_works_without_co2_value():

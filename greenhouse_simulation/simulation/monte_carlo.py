@@ -59,6 +59,14 @@ def run_monte_carlo(simulations=500, steps=12):
             values = _apply_effects(values, controls)
 
     df = pd.DataFrame(rows)
+    trend_df = df.groupby("step").agg(
+        temperature_mean=("temperature", "mean"),
+        soil_moisture_mean=("soil_moisture", "mean"),
+        co2_mean=("co2", "mean"),
+        ph_mean=("ph", "mean"),
+        npk_mean=("npk", "mean"),
+    ).reset_index()
+
     summary = {
         "pump_count": int(df["pump"].sum()),
         "fan_count": int(df["fan"].sum()),
@@ -67,5 +75,22 @@ def run_monte_carlo(simulations=500, steps=12):
         "alarm_count": int(df["alarm"].sum()),
         "avg_temperature": float(df["temperature"].mean()),
         "avg_soil_moisture": float(df["soil_moisture"].mean()),
+        "avg_co2": float(df["co2"].mean()),
+        "critical_low_moisture_count": int((df["soil_moisture"] < 25).sum()),
+        "critical_high_temperature_count": int((df["temperature"] > 38).sum()),
+        "critical_high_co2_count": int((df["co2"] > 900).sum()),
+        "action_summary": {
+            "pump": int(df["pump"].sum()),
+            "fan": int(df["fan"].sum()),
+            "open_greenhouse": int(df["open_greenhouse"].sum()),
+            "alarm": int(df["alarm"].sum()),
+        },
+        "trend_series": {
+            "temperature": trend_df["temperature_mean"].tolist(),
+            "soil_moisture": trend_df["soil_moisture_mean"].tolist(),
+            "co2": trend_df["co2_mean"].tolist(),
+            "ph": trend_df["ph_mean"].tolist(),
+            "npk": trend_df["npk_mean"].tolist(),
+        },
     }
     return summary, df

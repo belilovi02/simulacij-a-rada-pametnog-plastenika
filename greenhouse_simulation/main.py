@@ -7,6 +7,7 @@ from ui.dashboard import GreenhouseDashboard
 from simulation.sensors import SensorModel
 from simulation.actuators import ActuatorModel
 from simulation.ml_prediction import MLPrediction
+from simulation.weather_station import WeatherStationModel
 
 BASE_DIR = os.path.dirname(__file__)
 DATA_DIR = os.path.join(BASE_DIR, "data")
@@ -25,14 +26,15 @@ if __name__ == "__main__":
 
     sensors = SensorModel()
     actuators = ActuatorModel()
+    weather_station = WeatherStationModel()
     ml_model = MLPrediction()
 
-    arduino = ArduinoMegaController(sensors, actuators)
+    arduino = ArduinoMegaController(sensors, actuators, weather_station=weather_station)
     esp32 = ESP32Controller(arduino)
 
     root = tk.Tk()
     root.title("Pametni plastenik - Simulacija")
-    app = GreenhouseDashboard(root, esp32, arduino, sensors, actuators, ml_model, LOG_FILE)
+    app = GreenhouseDashboard(root, esp32, arduino, sensors, actuators, ml_model, LOG_FILE, weather_station)
 
     esp_thread = threading.Thread(target=esp32.run, daemon=True)
     mega_thread = threading.Thread(target=arduino.run, daemon=True)

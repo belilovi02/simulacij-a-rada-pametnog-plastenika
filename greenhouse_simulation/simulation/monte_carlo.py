@@ -82,6 +82,28 @@ def run_monte_carlo(simulations=500, steps=12):
 
     pump1_count = int(df["pump1"].sum())
     pump2_count = int(df["pump2"].sum())
+
+    def confidence_statistics(column):
+        """Deskriptivna statistika i 95% CI sredine (normalna aproksimacija)."""
+        values = df[column]
+        count = int(values.count())
+        mean = float(values.mean())
+        std = float(values.std(ddof=1))
+        standard_error = std / (count ** 0.5)
+        margin = 1.96 * standard_error
+        return {
+            "count": count,
+            "mean": mean,
+            "std": std,
+            "min": float(values.min()),
+            "max": float(values.max()),
+            "median": float(values.median()),
+            "standard_error": standard_error,
+            "ci95_lower": mean - margin,
+            "ci95_upper": mean + margin,
+            "ci95_width": margin * 2,
+        }
+
     summary = {
         "pump1_count": pump1_count,
         "pump2_count": pump2_count,
@@ -107,6 +129,13 @@ def run_monte_carlo(simulations=500, steps=12):
             "fan": int(df["fan"].sum()),
             "open_greenhouse": int(df["open_greenhouse"].sum()),
             "alarm": int(df["alarm"].sum()),
+        },
+        "uncertainty": {
+            "temperature": confidence_statistics("temperature"),
+            "soil_moisture": confidence_statistics("soil_moisture"),
+            "ph": confidence_statistics("ph"),
+            "npk": confidence_statistics("npk"),
+            "co2": confidence_statistics("co2"),
         },
         "trend_series": {
             "temperature": trend_df["temperature_mean"].tolist(),

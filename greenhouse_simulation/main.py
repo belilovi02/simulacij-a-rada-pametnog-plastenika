@@ -6,6 +6,7 @@ from controllers.arduino_mega_controller import ArduinoMegaController
 from ui.dashboard import GreenhouseDashboard
 from simulation.sensors import SensorModel
 from simulation.actuators import ActuatorModel
+from simulation.greenhouse_model import GreenhouseModel
 from simulation.ml_prediction import MLPrediction
 from simulation.weather_station import WeatherStationModel
 
@@ -27,9 +28,10 @@ if __name__ == "__main__":
     sensors = SensorModel()
     actuators = ActuatorModel()
     weather_station = WeatherStationModel()
+    greenhouse = GreenhouseModel(sensors, actuators, weather_station=weather_station)
     ml_model = MLPrediction()
 
-    arduino = ArduinoMegaController(sensors, actuators, weather_station=weather_station)
+    arduino = ArduinoMegaController(sensors, actuators, weather_station=weather_station, greenhouse_model=greenhouse)
     esp32 = ESP32Controller(arduino)
 
     root = tk.Tk()

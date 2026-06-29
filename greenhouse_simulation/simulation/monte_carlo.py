@@ -1,26 +1,20 @@
-import random
 import pandas as pd
-
-
-def _random_sensor_row():
-    return {
-        "temperature": random.uniform(15, 45),
-        "air_humidity": random.uniform(30, 95),
-        "soil_moisture": random.uniform(10, 90),
-        "ph": random.uniform(4.5, 8.5),
-        "npk": random.uniform(0, 250),
-        "co2": random.uniform(200, 1200),
-    }
+from .actuators import ActuatorModel
+from .greenhouse_model import GreenhouseModel
+from .sensors import SensorModel
+from .weather_station import WeatherStationModel
 
 
 def _apply_rules(values):
-    pump = values["soil_moisture"] < 35
-    fan = values["temperature"] > 32
-    open_greenhouse = values["temperature"] > 35
-    led = values["co2"] > 750
-    alarm = values["ph"] < 5.5 or values["ph"] > 7.5 or values["npk"] < 60
+    pump1 = values["soil_moisture"] < 38 or values["npk"] < 65
+    pump2 = values["soil_moisture"] < 28 and values["temperature"] > 28
+    fan = values["temperature"] > 30 or values["co2"] > 700 or values["air_humidity"] > 78
+    open_greenhouse = values["temperature"] > 32 and values["weather_signal"] not in {"rain", "wind"}
+    led = values["co2"] > 720 or values["temperature"] < 20 or values["air_humidity"] < 38
+    alarm = values["ph"] < 5.7 or values["ph"] > 7.2 or values["npk"] < 55 or values["soil_moisture"] < 18
     return {
-        "pump": pump,
+        "pump1": pump1,
+        "pump2": pump2,
         "fan": fan,
         "led": led,
         "open_greenhouse": open_greenhouse,
@@ -28,35 +22,51 @@ def _apply_rules(values):
     }
 
 
-def _apply_effects(values, controls):
-    updated = dict(values)
-    if controls["pump"]:
-        updated["soil_moisture"] = min(90, updated["soil_moisture"] + 2.5)
-    if controls["fan"]:
-        updated["temperature"] = max(15, updated["temperature"] - 0.7)
-    if controls["led"]:
-        updated["co2"] = max(200, updated["co2"] - 40)
-    if controls["open_greenhouse"]:
-        updated["temperature"] = max(15, updated["temperature"] - 0.3)
-
-    updated["temperature"] = min(45, max(15, updated["temperature"] + random.uniform(-1.2, 1.2)))
-    updated["air_humidity"] = min(95, max(30, updated["air_humidity"] + random.uniform(-2.5, 2.5)))
-    updated["soil_moisture"] = min(90, max(10, updated["soil_moisture"] + random.uniform(-1.0, 1.0)))
-    updated["ph"] = min(8.5, max(4.5, updated["ph"] + random.uniform(-0.15, 0.15)))
-    updated["npk"] = min(250, max(0, updated["npk"] + random.uniform(-8, 8)))
-    updated["co2"] = min(1200, max(200, updated["co2"] + random.uniform(-60, 60)))
-    return updated
+def _safe_zone(value_row):
+    return (
+        18 <= value_row["temperature"] <= 30
+        and 30 <= value_row["soil_moisture"] <= 70
+        and 300 <= value_row["co2"] <= 800
+        and 5.8 <= value_row["ph"] <= 7.0
+        and 80 <= value_row["npk"] <= 200
+    )
 
 
 def run_monte_carlo(simulations=500, steps=12):
     rows = []
     for simulation_id in range(simulations):
-        values = _random_sensor_row()
+        sensors = SensorModel()
+        weather = WeatherStationModel()
+        actuators = ActuatorModel()
+        greenhouse = GreenhouseModel(sensors, actuators, weather_station=weather)
+
         for step in range(steps):
+            weather.update()
+            sensor_values = sensors.current_values()
+            weather_values = weather.current_values()
+            values = {**sensor_values, **weather_values}
             controls = _apply_rules(values)
-            row = {"simulation_id": simulation_id, "step": step, **values, **controls}
+
+            actuators.pump1 = controls["pump1"]
+            actuators.pump2 = controls["pump2"]
+            actuators.fan = controls["fan"]
+            actuators.led = controls["led"]
+            actuators.greenhouse_open = controls["open_greenhouse"]
+            actuators.alarm = controls["alarm"]
+
+            row = {
+                "simulation_id": simulation_id,
+                "step": step,
+                **sensor_values,
+                "outdoor_temperature": weather_values["outdoor_temperature"],
+                "outdoor_humidity": weather_values["outdoor_humidity"],
+                "wind_speed": weather_values["wind_speed"],
+                "rainfall_mm": weather_values["rainfall_mm"],
+                "weather_signal": weather_values["weather_signal"],
+                **controls,
+            }
             rows.append(row)
-            values = _apply_effects(values, controls)
+            greenhouse.simulate_step()
 
     df = pd.DataFrame(rows)
     trend_df = df.groupby("step").agg(
@@ -67,8 +77,15 @@ def run_monte_carlo(simulations=500, steps=12):
         npk_mean=("npk", "mean"),
     ).reset_index()
 
+    df["safe_zone"] = df.apply(_safe_zone, axis=1)
+    weather_counts = df["weather_signal"].value_counts().to_dict()
+
+    pump1_count = int(df["pump1"].sum())
+    pump2_count = int(df["pump2"].sum())
     summary = {
-        "pump_count": int(df["pump"].sum()),
+        "pump1_count": pump1_count,
+        "pump2_count": pump2_count,
+        "pump_count": pump1_count + pump2_count,
         "fan_count": int(df["fan"].sum()),
         "led_count": int(df["led"].sum()),
         "open_greenhouse_count": int(df["open_greenhouse"].sum()),
@@ -76,11 +93,17 @@ def run_monte_carlo(simulations=500, steps=12):
         "avg_temperature": float(df["temperature"].mean()),
         "avg_soil_moisture": float(df["soil_moisture"].mean()),
         "avg_co2": float(df["co2"].mean()),
+        "avg_ph": float(df["ph"].mean()),
+        "avg_npk": float(df["npk"].mean()),
         "critical_low_moisture_count": int((df["soil_moisture"] < 25).sum()),
         "critical_high_temperature_count": int((df["temperature"] > 38).sum()),
         "critical_high_co2_count": int((df["co2"] > 900).sum()),
+        "safe_zone_ratio": float(df["safe_zone"].mean()),
+        "weather_counts": {key: int(value) for key, value in weather_counts.items()},
         "action_summary": {
-            "pump": int(df["pump"].sum()),
+            "pump": pump1_count + pump2_count,
+            "pump1": pump1_count,
+            "pump2": pump2_count,
             "fan": int(df["fan"].sum()),
             "open_greenhouse": int(df["open_greenhouse"].sum()),
             "alarm": int(df["alarm"].sum()),

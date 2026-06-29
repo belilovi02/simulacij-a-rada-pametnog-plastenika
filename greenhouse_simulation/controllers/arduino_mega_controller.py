@@ -3,14 +3,30 @@ from datetime import datetime
 
 
 class ArduinoMegaController:
-    def __init__(self, sensors, actuators, weather_station=None):
+    def __init__(self, sensors, actuators, weather_station=None, greenhouse_model=None):
         self.sensors = sensors
         self.actuators = actuators
         self.weather_station = weather_station
+        self.greenhouse_model = greenhouse_model
         self.status = "Offline"
         self.log_callback = None
         self.received_command = None
         self.manual_overrides = {}
+
+    def _get_override(self, key):
+        override = self.manual_overrides.get(key)
+        if not override:
+            return None
+        if override["expires_at"] < time.time():
+            self.manual_overrides.pop(key, None)
+            return None
+        return override["state"]
+
+    def _set_override(self, key, state, duration=12):
+        self.manual_overrides[key] = {
+            "state": state,
+            "expires_at": time.time() + duration,
+        }
 
     def set_log_callback(self, callback):
         self.log_callback = callback
@@ -33,7 +49,10 @@ class ArduinoMegaController:
         while True:
             time.sleep(1.5)
             self._log("Arduino Mega: očitavam senzore")
-            self.sensors.update()
+            if self.greenhouse_model:
+                self._apply_greenhouse_simulation()
+            else:
+                self.sensors.update()
             if self.weather_station:
                 self.weather_station.update()
             self._process_command()
@@ -57,11 +76,19 @@ class ArduinoMegaController:
         elif command == "pump2_on":
             self.actuators.pump2 = True
             self.manual_overrides["pump2"] = True
-            self._log("Arduino Mega: pumpa 2 uključena")
+            self._log("Arduino Mega: pumpa NPK uključena")
         elif command == "pump2_off":
             self.actuators.pump2 = False
             self.manual_overrides["pump2"] = False
-            self._log("Arduino Mega: pumpa 2 isključena")
+            self._log("Arduino Mega: pumpa NPK isključena")
+        elif command == "pump3_on":
+            self.actuators.pump3 = True
+            self.manual_overrides["pump3"] = True
+            self._log("Arduino Mega: pumpa 3 uključena")
+        elif command == "pump3_off":
+            self.actuators.pump3 = False
+            self.manual_overrides["pump3"] = False
+            self._log("Arduino Mega: pumpa 3 isključena")
         elif command == "fan_on":
             self.actuators.fan = True
             self.manual_overrides["fan"] = True
@@ -94,17 +121,20 @@ class ArduinoMegaController:
 
         if self.manual_overrides.get("pump1") is not None:
             self.actuators.pump1 = self.manual_overrides["pump1"]
-        elif values["soil_moisture"] < 35 or values["npk"] < 60:
+        elif values["soil_moisture"] < 35:
             self.actuators.pump1 = True
-            self._log("Arduino Mega: vlaga zemljišta niska ili NPK nizak, pumpa uključena")
+            self._log("Arduino Mega: vlaga zemljišta niska, pumpa za vodu uključena")
         else:
             self.actuators.pump1 = False
 
         if self.manual_overrides.get("fan") is not None:
             self.actuators.fan = self.manual_overrides["fan"]
-        elif values["temperature"] > 32 or values["co2"] > 750:
+        elif values["temperature"] > 32:
             self.actuators.fan = True
-            self._log("Arduino Mega: temperatura ili CO2 visoki, ventilator uključen")
+            self._log("Arduino Mega: temperatura visoka, ventilator uključen")
+        elif values["co2"] > 750:
+            self.actuators.fan = True
+            self._log("Arduino Mega: CO2 visok, ventilator uključen")
         else:
             self.actuators.fan = False
 
@@ -123,7 +153,23 @@ class ArduinoMegaController:
         if self.manual_overrides.get("led") is not None:
             self.actuators.led = self.manual_overrides["led"]
 
-        if values["ph"] < 5.5 or values["ph"] > 7.5 or values["npk"] < 60:
+        if self.manual_overrides.get("pump2") is not None:
+            self.actuators.pump2 = self.manual_overrides["pump2"]
+        elif values["soil_moisture"] < 28 and values["temperature"] > 28:
+            self.actuators.pump2 = True
+            self._log("Arduino Mega: NPK nizak, pumpa za hranjivo uključena")
+        else:
+            self.actuators.pump2 = False
+
+        if self.manual_overrides.get("pump3") is not None:
+            self.actuators.pump3 = self.manual_overrides["pump3"]
+        elif values["npk"] < 60:
+            self.actuators.pump3 = True
+            self._log("Arduino Mega: pumpa 3 uključena zbog visoke temperature i niske vlažnosti")
+        else:
+            self.actuators.pump3 = False
+
+        if values["ph"] < 5.5 or values["ph"] > 7.5 or values["npk"] < 50:
             self.actuators.alarm = True
             self._log("Arduino Mega: alarm aktiviran zbog neprihvatljivih vrijednosti")
         else:
@@ -165,7 +211,17 @@ class ArduinoMegaController:
             "irrigation_needed": int(values["soil_moisture"] < 35 or values["npk"] < 60 or values["temperature"] > 32),
             "ventilation_needed": int(values["temperature"] > 32 or values["co2"] > 750 or values["air_humidity"] < 40),
         }
-        self.apply_recommendation(prediction, values)
+        # Automatska preporuka ne smije prepisati trajnu rucnu postavku.
+        if "pump1" not in self.manual_overrides:
+            self.actuators.pump1 = bool(prediction["irrigation_needed"])
+        if "fan" not in self.manual_overrides:
+            self.actuators.fan = bool(prediction["ventilation_needed"])
+
+    def _apply_greenhouse_simulation(self):
+        try:
+            self.greenhouse_model.simulate_step()
+        except Exception:
+            self.sensors.update()
 
     def _log(self, message):
         if self.log_callback:

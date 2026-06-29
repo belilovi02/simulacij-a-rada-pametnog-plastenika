@@ -7,6 +7,7 @@ class EnergyModel:
         self.sensors_power = 0.5
         self.pump1_power = 12.0
         self.pump2_power = 12.0
+        self.pump3_power = 10.0
         self.fan_power = 8.0
         self.led_power = 10.0
         self.motor_power = 15.0
@@ -19,6 +20,7 @@ class EnergyModel:
         total = self.esp32_power + self.arduino_power + self.sensors_power
         total += self.pump1_power if self.actuators.pump1 else 0
         total += self.pump2_power if self.actuators.pump2 else 0
+        total += self.pump3_power if self.actuators.pump3 else 0
         total += self.fan_power if self.actuators.fan else 0
         total += self.led_power if self.actuators.led else 0
         total += self.motor_power if self.actuators.greenhouse_open else 0
@@ -46,7 +48,7 @@ class EnergyModel:
     def current_report(self):
         consumption = self.compute_consumption()
         production = self.compute_solar_production()
-        battery = self.update_battery(consumption)
+        battery = self.battery_level_wh
         runtime = self.estimate_runtime(consumption)
         net_balance = production - consumption
         battery_percentage = round((battery / self.battery_capacity_wh) * 100, 1)

@@ -42,17 +42,21 @@ class GreenhouseDashboard:
         self.ml_frame = ttk.Frame(self.notebook)
         self.weather_frame = ttk.Frame(self.notebook)
 
+        self.visualization_frame = ttk.Frame(self.notebook)
+
         self.notebook.add(self.dashboard_frame, text="Dashboard")
         self.notebook.add(self.montecarlo_frame, text="Monte Carlo")
         self.notebook.add(self.energy_frame, text="Energetska sim")
         self.notebook.add(self.ml_frame, text="ML predikcija")
         self.notebook.add(self.weather_frame, text="Meteo stanica")
+        self.notebook.add(self.visualization_frame, text="Plastenik")
 
         self._build_dashboard_tab()
         self._build_montecarlo_tab()
         self._build_energy_tab()
         self._build_ml_tab()
         self._build_weather_tab()
+        self._build_visualization_tab()
 
     def _build_dashboard_tab(self):
         values_frame = ttk.LabelFrame(self.dashboard_frame, text="Senzori")
@@ -96,6 +100,9 @@ class GreenhouseDashboard:
         self.esp32_status_label.pack(side=tk.LEFT, padx=4, pady=4)
         self.arduino_status_label = ttk.Label(status_frame, text="Arduino Mega: Offline")
         self.arduino_status_label.pack(side=tk.LEFT, padx=4, pady=4)
+
+        self.safe_zone_label = ttk.Label(self.dashboard_frame, text="Sigurna zona: ---")
+        self.safe_zone_label.pack(side=tk.TOP, anchor=tk.W, padx=12, pady=4)
 
         log_frame = ttk.LabelFrame(self.dashboard_frame, text="Log")
         log_frame.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True, padx=8, pady=8)
@@ -171,6 +178,49 @@ class GreenhouseDashboard:
         self.recommendation_label = ttk.Label(recommendation_frame, text="Čekam na podatke...")
         self.recommendation_label.pack(anchor=tk.W, padx=4, pady=4)
 
+    def _build_visualization_tab(self):
+        canvas_frame = ttk.LabelFrame(self.visualization_frame, text="Skica 2D plastenika")
+        canvas_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=8, pady=8)
+        self.greenhouse_canvas = tk.Canvas(canvas_frame, width=760, height=380, bg="#f7f9f3", highlightthickness=0)
+        self.greenhouse_canvas.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
+        self._draw_greenhouse_base()
+
+    def _draw_greenhouse_base(self):
+        self.greenhouse_canvas.delete("all")
+        self.greenhouse_canvas.create_rectangle(70, 90, 690, 330, fill="#e7f2e7", outline="#4a6a4a", width=4)
+        self.greenhouse_canvas.create_polygon(70, 90, 380, 20, 690, 90, fill="#d5ead5", outline="#4a6a4a", width=4)
+        self.greenhouse_canvas.create_rectangle(90, 100, 240, 280, fill="#dbe7d8", outline="#4a6a4a", width=2, tags="soil_bed")
+        self.greenhouse_canvas.create_text(165, 290, text="Gredica", font=("Helvetica", 10, "bold"), fill="#2f4b2c")
+        self.greenhouse_canvas.create_rectangle(310, 100, 390, 180, fill="#f9f0b9", outline="#c2aa4a", width=2, tags="led")
+        self.greenhouse_canvas.create_text(350, 140, text="LED", font=("Helvetica", 10, "bold"), tags="led_label")
+        self.greenhouse_canvas.create_oval(450, 110, 520, 170, fill="#b3defd", outline="#3b80c1", width=2, tags="fan")
+        self.greenhouse_canvas.create_text(485, 140, text="Ventilator", font=("Helvetica", 10, "bold"), tags="fan_label")
+        self.greenhouse_canvas.create_rectangle(90, 300, 160, 330, fill="#94c973", outline="#5d803f", width=2, tags="pump1")
+        self.greenhouse_canvas.create_text(125, 315, text="Pumpa 1", font=("Helvetica", 9), tags="pump1_label")
+        self.greenhouse_canvas.create_rectangle(170, 300, 240, 330, fill="#94c973", outline="#5d803f", width=2, tags="pump2")
+        self.greenhouse_canvas.create_text(205, 315, text="Pumpa 2", font=("Helvetica", 9), tags="pump2_label")
+        self.greenhouse_canvas.create_rectangle(520, 230, 640, 310, fill="#f1d8b5", outline="#9f7b3b", width=2, tags="door")
+        self.greenhouse_canvas.create_text(580, 270, text="Ulaz/otvoren", font=("Helvetica", 9), tags="door_label")
+        self.greenhouse_canvas.create_text(380, 40, text="Pametni plastenik", font=("Helvetica", 14, "bold"), fill="#2d5740")
+        self.greenhouse_canvas.create_text(380, 360, text="Za prikaz upaljenih sustava i vremena", font=("Helvetica", 9), fill="#2f4b2c")
+
+    def _update_visualization(self):
+        self._draw_greenhouse_base()
+        if self.actuators.pump1:
+            self.greenhouse_canvas.itemconfig("pump1", fill="#4caf50")
+        if self.actuators.pump2:
+            self.greenhouse_canvas.itemconfig("pump2", fill="#4caf50")
+        if self.actuators.fan:
+            self.greenhouse_canvas.itemconfig("fan", fill="#42a5f5")
+        if self.actuators.led:
+            self.greenhouse_canvas.itemconfig("led", fill="#fdd835")
+        if self.actuators.greenhouse_open:
+            self.greenhouse_canvas.itemconfig("door", fill="#aed581")
+        if self.actuators.alarm:
+            self.greenhouse_canvas.create_text(380, 200, text="ALARM! / Neispravne vrijednosti", font=("Helvetica", 11, "bold"), fill="#c0392b", tags="alarm_text")
+        weather_text = "Vani: " + (self.weather_station.current_values().get("weather_signal", "---") if self.weather_station else "---")
+        self.greenhouse_canvas.create_text(380, 60, text=weather_text, font=("Helvetica", 10, "italic"), fill="#39554b", tags="weather_text")
+
     def _refresh_loop(self):
         self._update_dashboard()
         self.root.after(1500, self._refresh_loop)
@@ -189,6 +239,15 @@ class GreenhouseDashboard:
         self.esp32_status_label.config(text=f"ESP32: {self.esp32.status}")
         self.arduino_status_label.config(text=f"Arduino Mega: {self.arduino.status}")
 
+        safe_zone = (
+            18 <= sensor_values["temperature"] <= 30
+            and 30 <= sensor_values["soil_moisture"] <= 70
+            and 300 <= sensor_values["co2"] <= 800
+            and 5.8 <= sensor_values["ph"] <= 7.0
+            and 80 <= sensor_values["npk"] <= 200
+        )
+        self.safe_zone_label.config(text=f"Sigurna zona: {'DA' if safe_zone else 'NE'}")
+
         energy_report = self.energy_model.current_report()
         for key, label in self.energy_labels.items():
             label.config(text=str(energy_report[key]))
@@ -196,6 +255,7 @@ class GreenhouseDashboard:
         self._update_energy_plot(energy_report)
         self._update_ml_tab()
         self._update_weather_tab()
+        self._update_visualization()
         self._write_log_to_csv(sensor_values, actuator_state, energy_report["consumption"])
 
     def _update_energy_plot(self, energy_report):
@@ -291,11 +351,14 @@ class GreenhouseDashboard:
         self.monte_results.config(state=tk.NORMAL)
         self.monte_results.delete("1.0", tk.END)
         self.monte_results.insert(tk.END, f"Simulacija: {simulations}\n")
-        self.monte_results.insert(tk.END, f"Pumpa uključena: {summary['pump_count']} puta\n")
+        self.monte_results.insert(tk.END, f"Pumpa 1 uključena: {summary['pump1_count']} puta\n")
+        self.monte_results.insert(tk.END, f"Pumpa 2 uključena: {summary['pump2_count']} puta\n")
         self.monte_results.insert(tk.END, f"Ventilator uključen: {summary['fan_count']} puta\n")
         self.monte_results.insert(tk.END, f"LED uključen: {summary['led_count']} puta\n")
         self.monte_results.insert(tk.END, f"Otvaranje plastenika: {summary['open_greenhouse_count']} puta\n")
         self.monte_results.insert(tk.END, f"Alarm: {summary['alarm_count']} puta\n")
+        self.monte_results.insert(tk.END, f"Sigurna zona ratio: {summary['safe_zone_ratio']:.2f}\n")
+        self.monte_results.insert(tk.END, f"Vrijeme signala: {summary['weather_counts']}\n")
         self.monte_results.insert(tk.END, f"Prosječna temperatura: {summary['avg_temperature']:.2f} °C\n")
         self.monte_results.insert(tk.END, f"Prosječna vlažnost zemljišta: {summary['avg_soil_moisture']:.2f}%\n")
         self.monte_results.insert(tk.END, f"Prosječni CO2: {summary['avg_co2']:.1f} ppm\n")
@@ -323,8 +386,11 @@ class GreenhouseDashboard:
         ax2.set_ylabel("Broj koraka")
 
         ax3 = self.monte_fig.add_subplot(223)
-        action_counts = [df["pump"].sum(), df["fan"].sum(), df["open_greenhouse"].sum(), df["alarm"].sum()]
-        ax3.bar(["Pumpa", "Ventilator", "Plastenik", "Alarm"], action_counts, color=["#e67e22", "#9b59b6", "#1abc9c", "#e74c3c"], edgecolor="black", alpha=0.9)
+        action_counts = [df["pump1"].sum(), df["pump2"].sum(), df["fan"].sum(), df["open_greenhouse"].sum(), df["alarm"].sum()]
+        ax3.bar(["Pumpa 1", "Pumpa 2", "Ventilator", "Plastenik", "Alarm"], action_counts, color=["#e67e22", "#f39c12", "#9b59b6", "#1abc9c", "#e74c3c"], edgecolor="black", alpha=0.9)
+        ax3.set_title("Broj aktivacija akcija")
+        ax3.set_ylabel("Ukupan broj")
+        ax3.tick_params(axis='x', rotation=15)
         ax3.set_title("Broj aktivacija akcija")
         ax3.set_ylabel("Ukupan broj")
 

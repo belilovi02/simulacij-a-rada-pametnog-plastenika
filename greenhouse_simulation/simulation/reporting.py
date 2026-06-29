@@ -5,6 +5,7 @@ from datetime import datetime
 import pandas as pd
 
 
+# Kopira Monte Carlo tablicu, dodaje vrijeme izvođenja i zapisuje rezultat u CSV.
 def save_monte_carlo_report(summary, df, output_path=None):
     if output_path is None:
         base_dir = os.path.dirname(os.path.dirname(__file__))
@@ -18,6 +19,7 @@ def save_monte_carlo_report(summary, df, output_path=None):
     return output_path
 
 
+# Pretvara jednu ML odluku i pripadajuće senzore u red te ga dodaje CSV povijesti.
 def save_prediction_event(values, prediction, recommendation, output_path=None):
     if output_path is None:
         base_dir = os.path.dirname(os.path.dirname(__file__))

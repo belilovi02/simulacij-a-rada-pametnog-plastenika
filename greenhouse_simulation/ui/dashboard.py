@@ -16,6 +16,7 @@ from simulation.reporting import save_monte_carlo_report, save_prediction_event
 
 
 class GreenhouseDashboard:
+    # Povezuje Tkinter prozor sa svim modelima i zatim gradi starije desktop sučelje.
     def __init__(self, root, esp32, arduino, sensors, actuators, ml_model, log_file, weather_station=None):
         self.root = root
         self.esp32 = esp32
@@ -32,6 +33,7 @@ class GreenhouseDashboard:
         self._build_ui()
         self._refresh_loop()
 
+    # Stvara kartice aplikacije i poziva zasebne graditelje sadržaja svake kartice.
     def _build_ui(self):
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill=tk.BOTH, expand=True)
@@ -58,6 +60,7 @@ class GreenhouseDashboard:
         self._build_weather_tab()
         self._build_visualization_tab()
 
+    # Gradi glavnu karticu sa senzorima, aktuatorima, energijom i ručnim komandama.
     def _build_dashboard_tab(self):
         values_frame = ttk.LabelFrame(self.dashboard_frame, text="Senzori")
         values_frame.pack(side=tk.TOP, fill=tk.X, padx=8, pady=8)
@@ -110,6 +113,7 @@ class GreenhouseDashboard:
         self.log_text = tk.Text(log_frame, height=12, state=tk.DISABLED)
         self.log_text.pack(fill=tk.BOTH, expand=True)
 
+    # Gradi unos broja scenarija, gumb i prostor za Monte Carlo rezultate.
     def _build_montecarlo_tab(self):
         controls = ttk.Frame(self.montecarlo_frame)
         controls.pack(side=tk.TOP, fill=tk.X, padx=8, pady=8)
@@ -126,6 +130,7 @@ class GreenhouseDashboard:
         self.monte_canvas = FigureCanvasTkAgg(self.monte_fig, master=self.montecarlo_frame)
         self.monte_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
 
+    # Priprema tekstualni energetski izvještaj i Matplotlib graf potrošnje.
     def _build_energy_tab(self):
         self.energy_report = ttk.LabelFrame(self.energy_frame, text="Energetski izvještaj")
         self.energy_report.pack(side=tk.TOP, fill=tk.X, padx=8, pady=8)
@@ -140,6 +145,7 @@ class GreenhouseDashboard:
         self.energy_canvas = FigureCanvasTkAgg(self.energy_fig, master=self.energy_frame)
         self.energy_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
 
+    # Stvara prikaz vanjskih meteoroloških vrijednosti i njihovih grafikona.
     def _build_weather_tab(self):
         weather_panel = ttk.LabelFrame(self.weather_frame, text="Podaci meteorološke stanice")
         weather_panel.pack(side=tk.TOP, fill=tk.X, padx=8, pady=8)
@@ -154,6 +160,7 @@ class GreenhouseDashboard:
         self.weather_canvas = FigureCanvasTkAgg(self.weather_fig, master=self.weather_frame)
         self.weather_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
 
+    # Gradi karticu s metrikama modela, predikcijom i preporukom akcije.
     def _build_ml_tab(self):
         info = ttk.LabelFrame(self.ml_frame, text="Model statistika")
         info.pack(side=tk.TOP, fill=tk.X, padx=8, pady=8)
@@ -178,6 +185,7 @@ class GreenhouseDashboard:
         self.recommendation_label = ttk.Label(recommendation_frame, text="Čekam na podatke...")
         self.recommendation_label.pack(anchor=tk.W, padx=4, pady=4)
 
+    # Priprema Canvas na kojem se crta pojednostavljeni digitalni plastenik.
     def _build_visualization_tab(self):
         canvas_frame = ttk.LabelFrame(self.visualization_frame, text="Skica 2D plastenika")
         canvas_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=8, pady=8)
@@ -185,6 +193,7 @@ class GreenhouseDashboard:
         self.greenhouse_canvas.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
         self._draw_greenhouse_base()
 
+    # Crta nepomičnu konstrukciju plastenika koja je osnova animiranog prikaza.
     def _draw_greenhouse_base(self):
         self.greenhouse_canvas.delete("all")
         self.greenhouse_canvas.create_rectangle(70, 90, 690, 330, fill="#e7f2e7", outline="#4a6a4a", width=4)
@@ -204,6 +213,7 @@ class GreenhouseDashboard:
         self.greenhouse_canvas.create_text(380, 40, text="Pametni plastenik", font=("Helvetica", 14, "bold"), fill="#2d5740")
         self.greenhouse_canvas.create_text(380, 360, text="Za prikaz upaljenih sustava i vremena", font=("Helvetica", 9), fill="#2f4b2c")
 
+    # Mijenja boje i oznake digitalnog prikaza prema trenutnim aktuatorima.
     def _update_visualization(self):
         self._draw_greenhouse_base()
         if self.actuators.pump1:
@@ -221,10 +231,12 @@ class GreenhouseDashboard:
         weather_text = "Vani: " + (self.weather_station.current_values().get("weather_signal", "---") if self.weather_station else "---")
         self.greenhouse_canvas.create_text(380, 60, text=weather_text, font=("Helvetica", 10, "italic"), fill="#39554b", tags="weather_text")
 
+    # Zakazuje periodično osvježavanje Tkinter sučelja bez blokiranja glavne niti.
     def _refresh_loop(self):
         self._update_dashboard()
         self.root.after(1500, self._refresh_loop)
 
+    # Čita modele i osvježava sve tekstualne senzore, aktuatore i energiju.
     def _update_dashboard(self):
         state = self.arduino.get_status()
         sensor_values = state["sensors"]
@@ -258,6 +270,7 @@ class GreenhouseDashboard:
         self._update_visualization()
         self._write_log_to_csv(sensor_values, actuator_state, energy_report["consumption"])
 
+    # Dodaje novo energetsko mjerenje u povijest i ponovno crta trendove.
     def _update_energy_plot(self, energy_report):
         self.energy_fig.clear()
         ax1 = self.energy_fig.add_subplot(121)
@@ -284,6 +297,7 @@ class GreenhouseDashboard:
         self.energy_fig.tight_layout()
         self.energy_canvas.draw()
 
+    # Osvježava meteorološke oznake i grafove najnovijim vanjskim stanjem.
     def _update_weather_tab(self):
         if not self.weather_station:
             return
@@ -304,6 +318,7 @@ class GreenhouseDashboard:
         self.weather_fig.tight_layout()
         self.weather_canvas.draw()
 
+    # Prikazuje aktualnu točnost i ostale informacije treniranog ML modela.
     def _update_ml_tab(self):
         self.confusion_text.config(state=tk.NORMAL)
         self.confusion_text.delete("1.0", tk.END)
@@ -320,6 +335,7 @@ class GreenhouseDashboard:
         self.feature_fig.tight_layout()
         self.feature_canvas.draw()
 
+    # Spaja unutarnje i vanjske ulaze te od modela traži trenutnu predikciju.
     def _predict_current(self):
         current = self.sensors.current_values()
         prediction = self.ml_model.predict(current)
@@ -330,6 +346,7 @@ class GreenhouseDashboard:
         save_prediction_event(current, prediction, self.recommendation_label.cget("text"))
         self.add_log("ESP32: pokrenuta ML predikcija na trenutnim podacima")
 
+    # Pretvara ML odluke u korisničku preporuku i sprema događaj u CSV.
     def _update_recommendation(self, current, prediction):
         actions = []
         if prediction["irrigation_needed"]:
@@ -345,6 +362,7 @@ class GreenhouseDashboard:
 
         self.recommendation_label.config(text="Preporuka: " + ", ".join(actions))
 
+    # Pokreće Monte Carlo iz desktop forme, prikazuje sažetak i sprema izvještaj.
     def run_monte_carlo(self):
         simulations = max(10, self.monte_input.get())
         summary, df = run_monte_carlo(simulations)
@@ -370,6 +388,7 @@ class GreenhouseDashboard:
         self._plot_montecarlo(df)
         save_monte_carlo_report(summary, df)
 
+    # Iz Monte Carlo DataFramea crta histograme, aktivacije i vremenske trendove.
     def _plot_montecarlo(self, df):
         self.monte_fig.clear()
 
@@ -408,6 +427,7 @@ class GreenhouseDashboard:
         self.monte_fig.tight_layout()
         self.monte_canvas.draw()
 
+    # Dodaje vremenski označenu poruku u vidljivi zapis događaja.
     def add_log(self, message):
         timestamp = datetime.now().strftime("%H:%M:%S")
         self.log_text.config(state=tk.NORMAL)
@@ -415,6 +435,7 @@ class GreenhouseDashboard:
         self.log_text.see(tk.END)
         self.log_text.config(state=tk.DISABLED)
 
+    # Dodaje trenutno stanje senzora, aktuatora i energije u simulacijski CSV.
     def _write_log_to_csv(self, sensors, actuators, energy_consumption):
         timestamp = datetime.now().isoformat()
         row = [

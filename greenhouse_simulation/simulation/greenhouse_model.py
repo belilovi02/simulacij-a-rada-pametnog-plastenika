@@ -3,17 +3,20 @@ import random
 
 
 class GreenhouseModel:
+    # Povezuje senzore, aktuatore i opcionalnu meteorološku stanicu u digitalni model.
     def __init__(self, sensors, actuators, weather_station=None):
         self.sensors = sensors
         self.actuators = actuators
         self.weather_station = weather_station
 
+    # Izvodi jedan ciklus: učinci uređaja, prirodni drift i utjecaj vanjskog vremena.
     def simulate_step(self):
         self._apply_actuator_effects()
         self._apply_environmental_drift()
         self._apply_weather_influence()
         return self.sensors.current_values()
 
+    # Mijenja mikroklimu prema uključenim pumpama, ventilatoru, LED-u i otvoru.
     def _apply_actuator_effects(self):
         if self.actuators.fan:
             self.sensors.temperature = max(15, self.sensors.temperature - random.uniform(0.6, 1.4))
@@ -37,6 +40,7 @@ class GreenhouseModel:
         if self.actuators.alarm:
             self.sensors.temperature = self._clamp(self.sensors.temperature + random.uniform(-0.3, 0.3), 15, 45)
 
+    # Dodaje male prirodne slučajne promjene kako stanje ne bi bilo statično.
     def _apply_environmental_drift(self):
         self.sensors.temperature = self._clamp(self.sensors.temperature + random.uniform(-1.0, 1.0), 15, 45)
         self.sensors.air_humidity = self._clamp(self.sensors.air_humidity + random.uniform(-3, 3), 30, 95)
@@ -45,6 +49,7 @@ class GreenhouseModel:
         self.sensors.npk = self._clamp(self.sensors.npk + random.uniform(-7, 7), 0, 250)
         self.sensors.co2 = self._clamp(self.sensors.co2 + random.uniform(-45, 45), 200, 1200)
 
+    # Prenosi dio vanjske temperature, vlage, kiše i vjetra na unutarnje stanje.
     def _apply_weather_influence(self):
         if not self.weather_station:
             return
@@ -68,6 +73,7 @@ class GreenhouseModel:
         if weather["wind_speed"] > 12:
             self.sensors.co2 = min(1200, self.sensors.co2 + random.uniform(5, 20))
 
+    # Drži svaku simuliranu vrijednost unutar fizički prihvatljivog intervala.
     @staticmethod
     def _clamp(value, minimum, maximum):
         return minimum if value < minimum else maximum if value > maximum else value

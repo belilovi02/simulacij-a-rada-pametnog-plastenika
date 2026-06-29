@@ -1,6 +1,8 @@
 import pandas as pd
 
 
+# Linearno interpolira zadane početne i završne uvjete, na svakom koraku primjenjuje
+# pragove upravljanja te vraća sažetak aktivacija i potpunu tablicu rezultata.
 def run_linear_simulation(
     temp_start=20.0,
     temp_end=38.0,

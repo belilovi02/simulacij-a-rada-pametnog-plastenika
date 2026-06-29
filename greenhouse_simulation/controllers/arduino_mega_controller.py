@@ -3,6 +3,7 @@ from datetime import datetime
 
 
 class ArduinoMegaController:
+    # Sprema reference modela, komunikacijsko stanje i trajne ručne postavke.
     def __init__(self, sensors, actuators, weather_station=None, greenhouse_model=None):
         self.sensors = sensors
         self.actuators = actuators
@@ -13,6 +14,7 @@ class ArduinoMegaController:
         self.received_command = None
         self.manual_overrides = {}
 
+    # Čita privremenu ručnu postavku i uklanja je ako joj je istekao rok.
     def _get_override(self, key):
         override = self.manual_overrides.get(key)
         if not override:
@@ -22,19 +24,23 @@ class ArduinoMegaController:
             return None
         return override["state"]
 
+    # Postavlja vremenski ograničenu ručnu vrijednost za odabrani aktuator.
     def _set_override(self, key, state, duration=12):
         self.manual_overrides[key] = {
             "state": state,
             "expires_at": time.time() + duration,
         }
 
+    # Registrira funkciju za centralizirani prikaz i spremanje događaja.
     def set_log_callback(self, callback):
         self.log_callback = callback
 
+    # Prima tekstualnu naredbu koju će sljedeća obrada pretvoriti u stanje uređaja.
     def receive_command(self, command):
         self.received_command = command
         self._log(f"Arduino Mega: primljena komanda '{command}'")
 
+    # Vraća objedinjeni status kontrolera, senzora, aktuatora i zadnje naredbe.
     def get_status(self):
         return {
             "status": self.status,
@@ -43,6 +49,7 @@ class ArduinoMegaController:
             "last_command": self.received_command,
         }
 
+    # Pokreće stalni ciklus simulacije, vremena, naredbi i autonomnih odluka.
     def run(self):
         self.status = "Online"
         self._log("Arduino Mega: pokrenut i u funkciji")
@@ -60,6 +67,7 @@ class ArduinoMegaController:
             self._apply_recommendation_logic()
             self._log("Arduino Mega: stanje poslato ESP32 modulu")
 
+    # Mapira naredbe poput pump1_on na konkretne aktuatore i ručno ih zaključava.
     def _process_command(self):
         command = self.received_command
         if not command:
@@ -116,6 +124,7 @@ class ArduinoMegaController:
 
         self.received_command = None
 
+    # Primjenjuje pragove senzora i vremena samo na uređaje bez ručne postavke.
     def _apply_control_logic(self):
         values = self.sensors.current_values()
 
@@ -175,6 +184,7 @@ class ArduinoMegaController:
         else:
             self.actuators.alarm = False
 
+    # Pretvara vanjsku ML preporuku u stanja navodnjavanja, ventilacije i krova.
     def apply_recommendation(self, prediction, current_values=None):
         values = current_values or self.sensors.current_values()
         if prediction.get("irrigation_needed"):
@@ -205,6 +215,7 @@ class ArduinoMegaController:
             self.actuators.greenhouse_open = False
             self.manual_overrides["greenhouse_open"] = False
 
+    # Iz trenutnih senzora gradi jednostavnu autonomnu preporuku uz zaštitu ručnih stanja.
     def _apply_recommendation_logic(self):
         values = self.sensors.current_values()
         prediction = {
@@ -217,12 +228,14 @@ class ArduinoMegaController:
         if "fan" not in self.manual_overrides:
             self.actuators.fan = bool(prediction["ventilation_needed"])
 
+    # Sigurno poziva digitalni model, a pri grešci koristi osnovno ažuriranje senzora.
     def _apply_greenhouse_simulation(self):
         try:
             self.greenhouse_model.simulate_step()
         except Exception:
             self.sensors.update()
 
+    # Usmjerava poruku prema callbacku ili terminalu i dodaje vremensku oznaku.
     def _log(self, message):
         if self.log_callback:
             self.log_callback(message)

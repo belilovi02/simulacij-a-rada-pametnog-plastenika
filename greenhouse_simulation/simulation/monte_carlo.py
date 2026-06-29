@@ -5,6 +5,7 @@ from .sensors import SensorModel
 from .weather_station import WeatherStationModel
 
 
+# Pretvara jedno nasumično stanje senzora i vremena u odluke svih aktuatora.
 def _apply_rules(values):
     pump1 = values["soil_moisture"] < 38 or values["npk"] < 65
     pump2 = values["soil_moisture"] < 28 and values["temperature"] > 28
@@ -22,6 +23,7 @@ def _apply_rules(values):
     }
 
 
+# Provjerava jesu li svi ključni mikroklimatski parametri istodobno u sigurnoj zoni.
 def _safe_zone(value_row):
     return (
         18 <= value_row["temperature"] <= 30
@@ -32,6 +34,8 @@ def _safe_zone(value_row):
     )
 
 
+# Pokreće mnogo neovisnih slučajnih scenarija, sprema svaki vremenski korak i na kraju
+# računa aktivacije, trendove, kritična stanja i statističku neizvjesnost rezultata.
 def run_monte_carlo(simulations=500, steps=12):
     rows = []
     for simulation_id in range(simulations):
@@ -83,6 +87,7 @@ def run_monte_carlo(simulations=500, steps=12):
     pump1_count = int(df["pump1"].sum())
     pump2_count = int(df["pump2"].sum())
 
+    # Za odabrani parametar računa sredinu, raspršenje i 95% interval pouzdanosti.
     def confidence_statistics(column):
         """Deskriptivna statistika i 95% CI sredine (normalna aproksimacija)."""
         values = df[column]

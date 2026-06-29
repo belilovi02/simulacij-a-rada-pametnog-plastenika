@@ -7,6 +7,7 @@ from sklearn.multioutput import MultiOutputClassifier
 
 
 class MLPrediction:
+    # Definira ulazne značajke i odmah priprema istrenirani višestruki klasifikator.
     def __init__(self):
         self.model = None
         self.accuracy = 0.0
@@ -27,6 +28,7 @@ class MLPrediction:
         ]
         self._train_model()
 
+    # Generira sintetičke, međusobno povezane senzorske podatke i dvije ciljne odluke.
     def _generate_dataset(self, rows=2400):
         data = []
         for _ in range(rows):
@@ -64,6 +66,7 @@ class MLPrediction:
             )
         return pd.DataFrame(data)
 
+    # Dijeli podatke, trenira Random Forest te računa točnost, matrice i važnosti.
     def _train_model(self):
         df = self._generate_dataset()
         X = df[self.feature_names]
@@ -91,6 +94,7 @@ class MLPrediction:
             [est.feature_importances_ for est in model.estimators_], axis=0
         )
 
+    # Slaže trenutne vrijednosti pravilnim redom i vraća odluke za vodu i ventilaciju.
     def predict(self, values):
         feature_values = [values.get(name, 0) for name in self.feature_names]
         X = pd.DataFrame([feature_values], columns=self.feature_names)
@@ -100,6 +104,7 @@ class MLPrediction:
             "ventilation_needed": int(predicted[1]),
         }
 
+    # Ograničava generirane podatke kako bi ostali u realističnom rasponu.
     @staticmethod
     def _clamp(value, minimum, maximum):
         return minimum if value < minimum else maximum if value > maximum else value

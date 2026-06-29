@@ -1,6 +1,7 @@
 
 
 class ActuatorModel:
+    # Postavlja sve simulirane izlazne uređaje u početno isključeno stanje.
     def __init__(self):
         self.pump1 = False
         self.pump2 = False
@@ -10,6 +11,7 @@ class ActuatorModel:
         self.greenhouse_open = False
         self.alarm = False
 
+    # Sjedinjuje interna stanja aktuatora u rječnik koji koriste kontroleri i sučelje.
     @property
     def state(self):
         return {

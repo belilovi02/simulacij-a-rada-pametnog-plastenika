@@ -44,12 +44,14 @@ running_state = {
 history = deque(maxlen=300)
 state_lock = threading.Lock()
 
+# Sastavlja atomsku snimku trenutnih senzora, uređaja, vremena, energije i ručnog moda.
 def snapshot():
     return {"timestamp": datetime.now().isoformat(timespec="seconds"),
             "sensors": sensors.current_values(), "actuators": actuators.state,
             "weather": weather_station.current_values(), "energy": energy_model.current_report(),
             "manual": dict(arduino_controller.manual_overrides)}
 
+# Svakih 1,5 sekundi pomiče simulaciju i sprema najnovije stanje u ograničenu povijest.
 def background_loop():
     while True:
         time.sleep(1.5)
@@ -62,10 +64,12 @@ def background_loop():
             history.append(snapshot())
 
 @app.route("/")
+# Renderira glavno HTML sučelje i predaje mu osnovne podatke ML modela.
 def index():
     return render_template("index.html", model_accuracy=ml_model.accuracy, feature_names=ml_model.feature_names)
 
 @app.route("/api/state")
+# Vraća trenutno stanje i vremensku povijest koju JavaScript koristi za grafikone.
 def api_state():
     state = snapshot()
     with state_lock:
@@ -73,6 +77,7 @@ def api_state():
     return jsonify(state)
 
 @app.route("/api/forecast")
+# Iz trenutnog stanja i dnevnog sinusnog ciklusa procjenjuje sljedeća 24 sata.
 def api_forecast():
     import math
     current = sensors.current_values(); points = []
@@ -86,6 +91,7 @@ def api_forecast():
     return jsonify({"date": (datetime.now()+timedelta(days=1)).date().isoformat(), "points": points})
 
 @app.route("/api/export_all")
+# Pretvara cijelu memorijsku povijest u CSV datoteku za preuzimanje i daljnju analizu.
 def api_export_all():
     output = io.StringIO(); writer = csv.writer(output)
     writer.writerow(["timestamp","temperature","air_humidity","soil_moisture","ph","npk","co2","outdoor_temperature","wind_speed","pump1","pump2","npk_pump","fan","greenhouse_open","consumption","production","battery_percentage"])
@@ -96,6 +102,7 @@ def api_export_all():
     response=make_response(output.getvalue()); response.headers["Content-Disposition"]="attachment; filename=greenhouse_all_values.csv"; response.headers["Content-Type"]="text/csv; charset=utf-8"; return response
 
 @app.route("/api/export_state")
+# Izvozi samo najnovije senzore, vrijeme, aktuatore i energiju kao parove ključ–vrijednost.
 def api_export_state():
     state = {
         **sensors.current_values(),
@@ -114,6 +121,7 @@ def api_export_state():
     return response
 
 @app.route("/api/predict", methods=["POST"])
+# Prima senzorske vrijednosti, poziva Random Forest i vraća odluku s preporukom.
 def api_predict():
     payload = request.get_json(force=True)
     values = payload.get("values", {})
@@ -124,6 +132,7 @@ def api_predict():
     return jsonify({"prediction": prediction, "recommendation": recommendation})
 
 @app.route("/api/montecarlo", methods=["POST"])
+# Pokreće traženi broj Monte Carlo scenarija i vraća sažetke i podatke za histograme.
 def api_montecarlo():
     req = request.get_json(force=True)
     simulations = int(req.get("simulations", 200))
@@ -135,6 +144,7 @@ def api_montecarlo():
                           "soil_moisture": chart_df["soil_moisture"].tolist()}})
 
 @app.route("/api/linear_simulation", methods=["POST"])
+# Čita početne i završne uvjete te vraća determinističku linearnu simulaciju.
 def api_linear_simulation():
     req = request.get_json(force=True)
     temp_start = float(req.get("temp_start", 20.0))
@@ -160,6 +170,7 @@ def api_linear_simulation():
     return jsonify({"summary": summary, "sample": df.to_dict(orient="records")})
 
 @app.route("/api/control", methods=["POST"])
+# Šalje ručnu naredbu kroz ESP32, odmah je obrađuje i vraća novo stanje uređaja.
 def api_control():
     payload = request.get_json(force=True)
     command = payload.get("command")
@@ -172,11 +183,13 @@ def api_control():
     return jsonify({"status": "error", "message": "Missing command"}), 400
 
 @app.route("/api/train")
+# Ponovno generira podatke i trenira Random Forest model na korisnički zahtjev.
 def api_train():
     ml_model._train_model()
     return jsonify({"status": "ok", "accuracy": ml_model.accuracy, "accuracy_scores": ml_model.accuracy_scores})
 
 @app.route("/api/random_forest")
+# Vraća metrike modela, važnosti značajki, matrice zabune i trenutnu predikciju.
 def api_random_forest():
     values = {**sensors.current_values(), **weather_station.current_values()}
     return jsonify({
@@ -187,6 +200,7 @@ def api_random_forest():
         "current_values": values, "current_prediction": ml_model.predict(values),
     })
 
+# Pretvara numeričke ML izlaze i temperaturu u razumljiv tekst preporučenih akcija.
 def _build_recommendation(values, prediction):
     actions = []
     if prediction.get("irrigation_needed"):

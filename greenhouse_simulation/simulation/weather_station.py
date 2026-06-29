@@ -2,6 +2,7 @@ import random
 
 
 class WeatherStationModel:
+    # Generira početne vanjske meteorološke uvjete u dopuštenim rasponima.
     def __init__(self):
         self.outdoor_temperature = random.uniform(10, 35)
         self.outdoor_humidity = random.uniform(30, 95)
@@ -9,6 +10,7 @@ class WeatherStationModel:
         self.rainfall_mm = random.uniform(0, 8)
         self.weather_signal = "sunny"
 
+    # Simulira sljedeće meteorološko očitanje malim slučajnim pomacima.
     def update(self):
         self.outdoor_temperature = self._clamp(self.outdoor_temperature + random.uniform(-2.5, 2.5), -10, 45)
         self.outdoor_humidity = self._clamp(self.outdoor_humidity + random.uniform(-6, 6), 20, 100)
@@ -16,6 +18,7 @@ class WeatherStationModel:
         self.rainfall_mm = self._clamp(self.rainfall_mm + random.uniform(-2.5, 2.5), 0, 20)
         self.weather_signal = self._classify_weather()
 
+    # Pretvara trenutno stanje stanice u zaokruženi rječnik za ostatak sustava.
     def current_values(self):
         return {
             "outdoor_temperature": round(self.outdoor_temperature, 1),
@@ -25,6 +28,7 @@ class WeatherStationModel:
             "weather_signal": self.weather_signal,
         }
 
+    # Određuje opisni signal vremena prema prioritetu kiša, vjetar, vrućina, sunčano.
     def _classify_weather(self):
         if self.rainfall_mm > 2.0:
             return "rain"
@@ -34,6 +38,7 @@ class WeatherStationModel:
             return "hot"
         return "sunny"
 
+    # Sprečava nerealne meteorološke vrijednosti izvan zadanih granica.
     @staticmethod
     def _clamp(value, minimum, maximum):
         if value < minimum:

@@ -2,6 +2,7 @@ import random
 
 
 class SensorModel:
+    # Inicijalizira senzore slučajnim vrijednostima unutar realističnih početnih raspona.
     def __init__(self):
         self.temperature = random.uniform(18, 28)
         self.air_humidity = random.uniform(40, 70)
@@ -10,6 +11,7 @@ class SensorModel:
         self.npk = random.uniform(80, 180)
         self.co2 = random.uniform(300, 800)
 
+    # Simulira novo očitanje dodavanjem male slučajne promjene i ograničava rezultat.
     def update(self):
         self.temperature = self._clamp(self.temperature + random.uniform(-1.5, 1.5), 15, 45)
         self.air_humidity = self._clamp(self.air_humidity + random.uniform(-4, 4), 30, 95)
@@ -18,6 +20,7 @@ class SensorModel:
         self.npk = self._clamp(self.npk + random.uniform(-10, 10), 0, 250)
         self.co2 = self._clamp(self.co2 + random.uniform(-80, 80), 200, 1200)
 
+    # Vraća sva trenutna očitanja kao zaokružen rječnik pogodan za API i CSV.
     def current_values(self):
         return {
             "temperature": round(self.temperature, 1),
@@ -28,6 +31,7 @@ class SensorModel:
             "co2": round(self.co2, 1),
         }
 
+    # Ograničava vrijednost na zadani fizički raspon senzora.
     @staticmethod
     def _clamp(value, minimum, maximum):
         if value < minimum:

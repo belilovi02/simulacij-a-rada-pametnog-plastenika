@@ -15,6 +15,7 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 LOG_FILE = os.path.join(DATA_DIR, "simulation_log.csv")
 
 
+# Osigurava postojanje data direktorija i početnog CSV zaglavlja za desktop verziju.
 def ensure_data_file():
     os.makedirs(DATA_DIR, exist_ok=True)
     if not os.path.exists(LOG_FILE):
